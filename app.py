@@ -73,8 +73,7 @@ st.markdown(
         border: 1px solid rgba(111, 145, 255, 0.28);
         border-radius: 12px;
         padding: 12px;
-        min-height: 340px;
-        max-height: 460px;
+        height: 420px;
         overflow: auto;
         box-shadow: inset 0 0 0 1px rgba(93, 129, 255, 0.18), 0 14px 28px rgba(0, 0, 0, 0.35);
       }
@@ -264,6 +263,28 @@ def json_signature(obj):
         return str(obj)
 
 
+def render_chat_window(structured):
+    chat_html = ['<div class="chat-window">']
+    max_idx = 0
+    for k in structured.keys():
+        m = re.match(r"^(user|ai)_msg(\d+)$", str(k), flags=re.IGNORECASE)
+        if m:
+            max_idx = max(max_idx, int(m.group(2)))
+    for i in range(1, max_idx + 1):
+        u = str(structured.get(f"user_msg{i}", structured.get(f"User_msg{i}", ""))).strip()
+        a = str(structured.get(f"AI_msg{i}", structured.get(f"ai_msg{i}", ""))).strip()
+        if u:
+            chat_html.append(
+                f'<div class="chat-row user"><div class="bubble user">{escape(u)}</div></div>'
+            )
+        if a:
+            chat_html.append(
+                f'<div class="chat-row ai"><div class="bubble ai">{escape(a)}</div></div>'
+            )
+    chat_html.append("</div>")
+    st.markdown("".join(chat_html), unsafe_allow_html=True)
+
+
 left_col, right_col = st.columns([1.2, 1], gap="large")
 
 with left_col:
@@ -280,6 +301,8 @@ with left_col:
             uploaded_history = json.loads(history_file.getvalue().decode("utf-8"))
             turns = parse_history_json_obj(uploaded_history)
             st.success(f"Conversation JSON loaded. Detected turns: {len(turns)}")
+            st.markdown("Input JSON Chat")
+            render_chat_window(uploaded_history)
         except Exception:
             st.error("Invalid conversation JSON. Please upload a valid file.")
 
@@ -360,30 +383,10 @@ if outputs_match_context:
         st.write("Select a generated answer to preview:")
         model_names = [o["model"] for o in outputs]
         selected_model = st.selectbox("Generated model", model_names)
-
         selected_output = next(o for o in outputs if o["model"] == selected_model)
-        st.markdown("Generated output")
 
-        chat_html = ['<div class="chat-window">']
-        structured = selected_output["structured"]
-        max_idx = 0
-        for k in structured.keys():
-            m = re.match(r"^(user|ai)_msg(\d+)$", str(k), flags=re.IGNORECASE)
-            if m:
-                max_idx = max(max_idx, int(m.group(2)))
-        for i in range(1, max_idx + 1):
-            u = str(structured.get(f"user_msg{i}", structured.get(f"User_msg{i}", ""))).strip()
-            a = str(structured.get(f"AI_msg{i}", structured.get(f"ai_msg{i}", ""))).strip()
-            if u:
-                chat_html.append(
-                    f'<div class="chat-row user"><div class="bubble user">{escape(u)}</div></div>'
-                )
-            if a:
-                chat_html.append(
-                    f'<div class="chat-row ai"><div class="bubble ai">{escape(a)}</div></div>'
-                )
-        chat_html.append("</div>")
-        st.markdown("".join(chat_html), unsafe_allow_html=True)
+        st.markdown("Model Answer Chat")
+        render_chat_window(selected_output["structured"])
 elif outputs:
     st.info("JSON file or few-shot count changed. Click Generate Model Answers to refresh outputs.")
 
