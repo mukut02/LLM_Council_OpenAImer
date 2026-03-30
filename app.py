@@ -18,6 +18,19 @@ st.markdown(
       html, body, [class*="css"] {
         font-family: 'Space Grotesk', sans-serif;
       }
+      /* Hide Streamlit top chrome/menu bar */
+      header[data-testid="stHeader"] {
+        display: none;
+      }
+      [data-testid="stToolbar"] {
+        display: none;
+      }
+      [data-testid="stDecoration"] {
+        display: none;
+      }
+      #MainMenu, footer {
+        visibility: hidden;
+      }
       .stApp {
         background:
           radial-gradient(1200px 500px at 10% -10%, rgba(255, 86, 48, 0.22), transparent 60%),

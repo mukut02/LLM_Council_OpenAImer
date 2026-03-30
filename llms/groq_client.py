@@ -5,6 +5,12 @@ from openai import OpenAI
 
 from config import GROQ_API_KEY
 
+if not GROQ_API_KEY:
+    raise RuntimeError(
+        "GROQ_API_KEY not found. Set environment variable GROQ_API_KEY "
+        "(or Streamlit Cloud secret) before running."
+    )
+
 client = OpenAI(
     api_key=GROQ_API_KEY,
     base_url="https://api.groq.com/openai/v1",
