@@ -1,64 +1,43 @@
 {
   "examples": [
     {
-      "id": 1,
-      "category": "Emotional Exhaustion / Drained",
-      "user": "I feel tired all the time. Not just physically, like even thinking feels like too much.",
-      "ai": "That kind of tiredness isn’t just about sleep, it’s more like your mind has been carrying too much for too long. Do you feel like there’s something specific draining you, or has it just slowly built up over time?"
+      "id": "case_1",
+      "user_msg1": "My parents have been having a rough time lately and my exams didn't go well. I just feel like I let everyone down.",
+      "AI_msg1": "You were carrying two very different kinds of weight simultaneously: pressure to perform and watching something at home fall apart. And somewhere in that, it sounds like you started holding yourself responsible for both. Do you feel like doing well at uni was somehow connected to fixing things at home?",
+      "user_msg2": "Yeah… I thought if I did well, at least something would be okay. Like I could balance things out.",
+      "AI_msg2": "That makes a lot of sense. When things feel unstable at home, it’s natural to look for something you can control and make right. But it also means you were trying to solve two problems with one outcome—and that’s a heavy expectation to place on yourself.",
+      "user_msg3": "Now both are messed up. Home is still bad and I failed my exams.",
+      "AI_msg3": "It feels like everything collapsed at once, but those two things were never truly in your control in the first place. Your exams reflect effort under pressure—not your worth—and what’s happening at home isn’t something you caused or could fix alone.",
+      "user_msg4": "I still feel like I should have done better. Like I wasn’t strong enough.",
+      "AI_msg4": "You weren’t lacking strength—you were already stretched thin. Holding emotional stress and academic pressure together takes energy most people underestimate. Struggling under that doesn’t mean weakness; it means you were carrying more than one person reasonably should.",
+      "user_msg5": "I don’t even know what to do next now.",
+      "AI_msg5": "You don’t have to solve everything at once. A starting point could be separating the two: for your exams, look into what options you have—re-evaluation, retakes, or speaking with an academic advisor. And for what’s happening at home, it might help to remind yourself that being present and taking care of your own stability is already enough—you don’t have to fix it."
     },
     {
-      "id": 2,
-      "category": "Low / Heavy Mood",
-      "user": "I don’t feel like doing anything these days. Even things I used to enjoy feel pointless.",
-      "ai": "When things that once mattered start feeling empty, it usually means something deeper has shifted, not that you’ve suddenly stopped caring. Does it feel more like a loss of interest, or more like you don’t have the energy to engage anymore?"
+      "id": "case_2",
+      "user_msg1": "I lost something today that I don’t think I’ll ever get back.",
+      "AI_msg1": "That kind of loss can feel like something inside you has gone quiet in a way you didn’t choose. You don’t have to rush to explain it—do you want to tell me what it was?",
+      "user_msg2": "It was my journal. Years of thoughts… everything I never told anyone.",
+      "AI_msg2": "That’s not just an object—you lost a version of yourself that only existed there. It makes sense that this feels heavier than it might seem to anyone else. It’s like parts of your past suddenly have no witness anymore.",
+      "user_msg3": "Yeah… it feels like those memories are just gone now.",
+      "AI_msg3": "The pages are gone, but the fact that you lived those moments hasn’t disappeared. Still, it’s painful because that journal held the shape of those experiences—the way you understood them back then.",
+      "user_msg4": "I keep thinking I should’ve been more careful. This is my fault.",
+      "AI_msg4": "It’s natural to look for someone to blame, and the easiest target is yourself. But being human includes losing things we never thought we would.",
+      "user_msg5": "It had things from a really bad phase of my life… stuff I survived.",
+      "AI_msg5": "Then it wasn’t just a record—it was evidence that you made it through something dark. Even without the journal, that truth hasn’t changed. When you’re ready, you could try rewriting even a fragment."
     },
     {
-      "id": 3,
-      "category": "Irritation / Overwhelm",
-      "user": "Everyone is just annoying me lately. Even small things are getting to me.",
-      "ai": "It sounds like your tolerance is worn thin, like your system is already overloaded and even small things are tipping it over. Has something been building up underneath all this irritation?"
-    },
-    {
-      "id": 4,
-      "category": "Anxiety / Overthinking",
-      "user": "I keep thinking about everything that could go wrong. I can’t switch it off.",
-      "ai": "When your mind keeps jumping ahead like that, it’s usually trying to protect you by preparing for worst cases, even if it’s exhausting. Do you notice if it gets worse at certain times, like when you’re alone or trying to rest?"
-    },
-    {
-      "id": 5,
-      "category": "Numbness",
-      "user": "I don’t really feel sad or happy. Just… nothing.",
-      "ai": "That ‘nothing’ feeling can sometimes be your mind’s way of stepping back when things get overwhelming. It’s not emptiness in a simple sense, more like everything’s been turned down. Do you remember when you last felt something strongly?"
-    },
-    {
-      "id": 6,
-      "category": "Conflicted / Stuck",
-      "user": "I don’t know what I’m supposed to do anymore. Every option feels wrong.",
-      "ai": "That kind of stuck feeling often comes when every choice feels like it carries some kind of loss. Is it more that you’re afraid of making the wrong decision, or that none of the options feel right to begin with?"
-    },
-    {
-      "id": 7,
-      "category": "Disappointment",
-      "user": "I worked really hard for this and it still didn’t work out.",
-      "ai": "That hits harder than people realize, when effort doesn’t translate into outcome. It’s not just about what happened, it’s about what you expected it to mean. What were you hoping this would change for you?"
-    },
-    {
-      "id": 8,
-      "category": "Hopeful but Uncertain",
-      "user": "I feel like something might get better, but I’m also scared it won’t.",
-      "ai": "That mix of hope and hesitation makes sense, you’re letting yourself imagine something better, but also protecting yourself from being disappointed again. What feels different this time compared to before?"
-    },
-    {
-      "id": 9,
-      "category": "Guilt / Self-Blame",
-      "user": "I feel like I messed everything up. It’s probably my fault.",
-      "ai": "When things go wrong, it’s really easy to pull all the blame onto yourself, even for things that weren’t fully in your control. What part of this actually feels like it was yours to carry, and what might not be?"
-    },
-    {
-      "id": 10,
-      "category": "Subtle Withdrawal",
-      "user": "I’ve just been staying in my room mostly. I don’t really feel like talking to anyone.",
-      "ai": "Pulling back like that usually isn’t random, it’s often a way of protecting yourself when something feels off. Does being alone feel more comforting right now, or more like you just don’t have the energy to be around people?"
+      "id": "case_3",
+      "user_msg1": "I messed up today. I had an important interview at 9 AM and I woke up at 11.",
+      "AI_msg1": "That sounds really stressful. Missing something important like an interview can feel overwhelming.",
+      "user_msg2": "Yeah, I really needed that job. I didn’t sleep properly last night and I think I just crashed.",
+      "AI_msg2": "It sounds like the lack of sleep played a big role here, not just carelessness. One possible next step is to send a polite follow-up email explaining the situation.",
+      "user_msg3": "But won’t that make me look irresponsible?",
+      "AI_msg3": "It depends on how you frame it. If you acknowledge the mistake honestly and take responsibility, many recruiters appreciate the professionalism.",
+      "user_msg4": "Can you write that email for me?",
+      "AI_msg4": "Subject: Apology for Missing Scheduled Interview\n\nDear [Interviewer’s Name],\n\nI sincerely apologize for missing my scheduled interview today at 9 AM...\n\nBest regards,\n[Your Name]",
+      "user_msg5": "Also this is the same company I told you about yesterday, the startup one.",
+      "AI_msg5": "Right, you mentioned this was a startup you were really excited about. You might consider adding one line about why you’re specifically interested in their work."
     }
   ]
 }

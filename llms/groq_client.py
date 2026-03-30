@@ -1,4 +1,5 @@
 from functools import lru_cache
+import re
 
 from openai import OpenAI
 
@@ -56,6 +57,13 @@ def _resolve_model_id(requested_model):
     )
 
 
+def _strip_leading_think_block(text):
+    if not text:
+        return text
+    # Remove only the first leading <think>...</think> section if present.
+    return re.sub(r"^\s*<think>.*?</think>\s*", "", text, count=1, flags=re.IGNORECASE | re.DOTALL)
+
+
 def generate(model, prompt):
     resolved_model = _resolve_model_id(model)
     response = client.chat.completions.create(
@@ -64,4 +72,7 @@ def generate(model, prompt):
         temperature=0.7,
         timeout=30,
     )
-    return response.choices[0].message.content
+    content = response.choices[0].message.content
+    if "qwen" in model.lower() or "deepseek" in model.lower():
+        content = _strip_leading_think_block(content)
+    return content
