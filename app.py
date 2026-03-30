@@ -388,7 +388,7 @@ elif outputs:
     st.info("JSON file or few-shot count changed. Click Generate Model Answers to refresh outputs.")
 
 st.markdown("---")
-st.subheader("Live Council Grading (Median of 3 LLMs)")
+st.subheader("Live Council Grading")
 
 if outputs_match_context and selected_output and uploaded_history is not None:
     st.markdown(f"**Selected Generated Model: `{selected_model}`**")
