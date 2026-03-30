@@ -2,6 +2,7 @@ import json
 import re
 from html import escape
 from statistics import median
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import streamlit as st
 
@@ -401,19 +402,35 @@ if outputs_match_context and selected_output and uploaded_history is not None:
     history_key = json_signature(council_history)
 
     results_by_model = {}
-    with st.spinner("Council grading in progress..."):
-        for out in outputs:
-            out_model = out["model"]
-            participant_answer = get_latest_ai_from_history_json(out["structured"])
+    missing_jobs = []
+    for out in outputs:
+        out_model = out["model"]
+        participant_answer = get_latest_ai_from_history_json(out["structured"])
+        cache_key = f"{eval_prompt}::{out_model}::{participant_answer}::{history_key}"
+        cached = st.session_state.council_cache.get(cache_key)
+        if cached is not None:
+            results_by_model[out_model] = cached
+        else:
+            missing_jobs.append((out_model, participant_answer, cache_key))
 
-            cache_key = f"{eval_prompt}::{out_model}::{participant_answer}::{history_key}"
-            if cache_key not in st.session_state.council_cache:
-                st.session_state.council_cache[cache_key] = evaluate_with_council(
-                    user_prompt=eval_prompt,
-                    participant_answer=participant_answer,
-                    conversation_history=council_history,
-                )
-            results_by_model[out_model] = st.session_state.council_cache[cache_key]
+    if missing_jobs:
+        with st.spinner("Council grading in progress..."):
+            max_workers = min(len(missing_jobs), 3)
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_map = {
+                    executor.submit(
+                        evaluate_with_council,
+                        user_prompt=eval_prompt,
+                        participant_answer=participant_answer,
+                        conversation_history=council_history,
+                    ): (out_model, cache_key)
+                    for out_model, participant_answer, cache_key in missing_jobs
+                }
+                for future in as_completed(future_map):
+                    out_model, cache_key = future_map[future]
+                    result_val = future.result()
+                    st.session_state.council_cache[cache_key] = result_val
+                    results_by_model[out_model] = result_val
 
     result = results_by_model[selected_model]
 
