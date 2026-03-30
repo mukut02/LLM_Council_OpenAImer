@@ -6,9 +6,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import streamlit as st
 
+from config import MODELS
 from evaluator.council import evaluate_with_council
-from llms.generate import generate_all
-from utils.prompt import build_few_shot_json_prompt
+from llms.generate import generate_one
+from utils.prompt import build_sequential_turn_prompt
 
 st.set_page_config(page_title="OpenAImer LLM Council")
 
@@ -146,6 +147,8 @@ if "generated_meta" not in st.session_state:
 if "council_cache" not in st.session_state:
     st.session_state.council_cache = {}
 
+MAX_GENERATED_TURNS = 5
+
 
 def parse_history_json_obj(history_obj):
     if not isinstance(history_obj, dict):
@@ -245,6 +248,9 @@ def upsert_json_turn(history_obj, user_msg, ai_msg, fill_pending=False):
 def get_latest_ai_from_history_json(history_obj):
     if not isinstance(history_obj, dict):
         return ""
+    direct_ai = str(history_obj.get("AI_msg", history_obj.get("ai_msg", ""))).strip()
+    if direct_ai:
+        return direct_ai
     last_idx = 0
     for key in history_obj.keys():
         if not isinstance(key, str):
@@ -264,16 +270,164 @@ def json_signature(obj):
         return str(obj)
 
 
+def normalize_history_json_obj(history_obj, max_turns=MAX_GENERATED_TURNS):
+    turns = parse_history_json_obj(history_obj)
+    normalized = {}
+    for idx, turn in enumerate(turns[: max(0, max_turns)], start=1):
+        user_text = str(turn.get("user", "")).strip()
+        ai_text = str(turn.get("assistant", "")).strip()
+        if user_text:
+            normalized[f"user_msg{idx}"] = user_text
+        if ai_text:
+            normalized[f"AI_msg{idx}"] = ai_text
+    return normalized
+
+
+def extract_generated_history_json(raw_text, fallback_history, user_prompt, fill_pending=False):
+    parsed_obj = None
+    text = str(raw_text or "").strip()
+    if text:
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, dict):
+                parsed_obj = parsed
+        except Exception:
+            fenced = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, flags=re.DOTALL)
+            candidate = fenced.group(1) if fenced else None
+            if not candidate:
+                raw_obj = re.search(r"(\{[\s\S]*\})", text)
+                candidate = raw_obj.group(1) if raw_obj else None
+            if candidate:
+                try:
+                    parsed = json.loads(candidate)
+                    if isinstance(parsed, dict):
+                        parsed_obj = parsed
+                except Exception:
+                    parsed_obj = None
+
+    if isinstance(parsed_obj, dict):
+        has_numbered_keys = any(
+            isinstance(key, str) and re.match(r"^(user|ai)_msg\d+$", key.strip(), flags=re.IGNORECASE)
+            for key in parsed_obj.keys()
+        )
+        if has_numbered_keys:
+            return normalize_history_json_obj(parsed_obj, max_turns=MAX_GENERATED_TURNS)
+
+        assistant_text = str(
+            parsed_obj.get("AI_msg", parsed_obj.get("ai_msg", parsed_obj.get("response", "")))
+        ).strip()
+        if assistant_text:
+            fallback = upsert_json_turn(
+                fallback_history,
+                user_prompt,
+                assistant_text,
+                fill_pending=fill_pending,
+            )
+            return normalize_history_json_obj(fallback, max_turns=MAX_GENERATED_TURNS)
+
+    fallback = upsert_json_turn(
+        fallback_history,
+        user_prompt,
+        text.strip(),
+        fill_pending=fill_pending,
+    )
+    return normalize_history_json_obj(fallback, max_turns=MAX_GENERATED_TURNS)
+
+
+def to_pretty_json_text(obj):
+    if not isinstance(obj, dict):
+        return "{}"
+    return json.dumps(obj, ensure_ascii=False, indent=2)
+
+
+def build_user_only_history(history_obj, max_turns=MAX_GENERATED_TURNS):
+    turns = parse_history_json_obj(history_obj)
+    user_only = {}
+    for idx, turn in enumerate(turns[: max(0, max_turns)], start=1):
+        user_text = str(turn.get("user", "")).strip()
+        if user_text:
+            user_only[f"user_msg{idx}"] = user_text
+    return user_only
+
+
+def extract_generated_ai_text(raw_text, turn_idx):
+    parsed_obj = None
+    text = str(raw_text or "").strip()
+    if text:
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, dict):
+                parsed_obj = parsed
+        except Exception:
+            fenced = re.search(r"```(?:json)?\s*(\{.*\})\s*```", text, flags=re.DOTALL)
+            candidate = fenced.group(1) if fenced else None
+            if not candidate:
+                raw_obj = re.search(r"(\{[\s\S]*\})", text)
+                candidate = raw_obj.group(1) if raw_obj else None
+            if candidate:
+                try:
+                    parsed = json.loads(candidate)
+                    if isinstance(parsed, dict):
+                        parsed_obj = parsed
+                except Exception:
+                    parsed_obj = None
+
+    if isinstance(parsed_obj, dict):
+        ordered_keys = [
+            f"AI_msg{turn_idx}",
+            f"ai_msg{turn_idx}",
+            "AI_msg",
+            "ai_msg",
+            "response",
+        ]
+        for key in ordered_keys:
+            value = str(parsed_obj.get(key, "")).strip()
+            if value:
+                return value
+
+    return text
+
+
+def generate_structured_history_for_model(model, input_history_obj, max_turns=MAX_GENERATED_TURNS):
+    user_only_history = build_user_only_history(input_history_obj, max_turns=max_turns)
+    generated_history = {}
+    last_result = None
+
+    for turn_idx in range(1, max_turns + 1):
+        user_text = str(user_only_history.get(f"user_msg{turn_idx}", "")).strip()
+        if not user_text:
+            continue
+
+        generated_history[f"user_msg{turn_idx}"] = user_text
+        turn_prompt = build_sequential_turn_prompt(
+            history_obj=generated_history,
+            current_turn_idx=turn_idx,
+            num_examples=10_000,
+            max_turns=max_turns,
+        )
+        last_result = generate_one(model, turn_prompt)
+        ai_text = extract_generated_ai_text(last_result.get("text", ""), turn_idx).strip()
+        generated_history[f"AI_msg{turn_idx}"] = ai_text
+
+    return {
+        "model": model,
+        "requested_model": last_result.get("requested_model", model) if last_result else model,
+        "resolved_model": last_result.get("resolved_model", model) if last_result else model,
+        "raw_text": last_result.get("text", "") if last_result else "",
+        "structured": normalize_history_json_obj(generated_history, max_turns=max_turns),
+    }
+
+
 def render_chat_window(structured):
+    turns = parse_history_json_obj(structured)
+    render_chat_turns(turns)
+
+
+def render_chat_turns(turns):
     chat_html = ['<div class="chat-window">']
-    max_idx = 0
-    for k in structured.keys():
-        m = re.match(r"^(user|ai)_msg(\d+)$", str(k), flags=re.IGNORECASE)
-        if m:
-            max_idx = max(max_idx, int(m.group(2)))
-    for i in range(1, max_idx + 1):
-        u = str(structured.get(f"user_msg{i}", structured.get(f"User_msg{i}", ""))).strip()
-        a = str(structured.get(f"AI_msg{i}", structured.get(f"ai_msg{i}", ""))).strip()
+    for turn in turns:
+        u = str(turn.get("user", "")).strip()
+        a = str(turn.get("assistant", "")).strip()
         if u:
             chat_html.append(
                 f'<div class="chat-row user"><div class="bubble user">{escape(u)}</div></div>'
@@ -284,6 +438,104 @@ def render_chat_window(structured):
             )
     chat_html.append("</div>")
     st.markdown("".join(chat_html), unsafe_allow_html=True)
+
+
+def get_generated_assistant_preview_turns(input_history_obj, output_history_obj):
+    return get_continuation_turns(input_history_obj, output_history_obj)
+
+
+def get_generated_delta_turns(input_history_obj, output_history_obj):
+    input_turns = parse_history_json_obj(input_history_obj)
+    output_turns = parse_history_json_obj(output_history_obj)
+
+    min_len = min(len(input_turns), len(output_turns))
+    diff_idx = None
+    for i in range(min_len):
+        if (
+            input_turns[i].get("user", "") != output_turns[i].get("user", "")
+            or input_turns[i].get("assistant", "") != output_turns[i].get("assistant", "")
+        ):
+            diff_idx = i
+            break
+
+    if diff_idx is None:
+        if len(output_turns) > len(input_turns):
+            diff_idx = len(input_turns)
+        elif output_turns:
+            diff_idx = max(0, len(output_turns) - 1)
+        else:
+            diff_idx = 0
+
+    return output_turns[diff_idx:]
+
+
+def get_continuation_turns(input_history_obj, output_history_obj):
+    """
+    Deterministic continuation extraction:
+    1) Remove longest common prefix between input and output chats.
+    2) Return the remaining output turns as continuation.
+    3) Hide duplicated first user prompt if it repeats input's last user turn.
+    """
+    input_turns = parse_history_json_obj(input_history_obj)
+    output_turns = parse_history_json_obj(output_history_obj)
+
+    if not output_turns:
+        return []
+
+    prefix = 0
+    while prefix < len(input_turns) and prefix < len(output_turns):
+        in_t = input_turns[prefix]
+        out_t = output_turns[prefix]
+        if (
+            str(in_t.get("user", "")).strip() == str(out_t.get("user", "")).strip()
+            and str(in_t.get("assistant", "")).strip() == str(out_t.get("assistant", "")).strip()
+        ):
+            prefix += 1
+        else:
+            break
+
+    continuation = [
+        {
+            "user": str(t.get("user", "")).strip(),
+            "assistant": str(t.get("assistant", "")).strip(),
+        }
+        for t in output_turns[prefix:]
+    ]
+
+    if continuation and input_turns:
+        last_input_user = str(input_turns[-1].get("user", "")).strip()
+        if continuation[0]["user"] == last_input_user:
+            continuation[0]["user"] = ""
+
+    return continuation
+
+
+def get_continuation_by_generated_index(output_history_obj, generated_turn_idx, input_history_obj=None):
+    output_turns = parse_history_json_obj(output_history_obj)
+    if not output_turns:
+        return []
+
+    if generated_turn_idx is None:
+        return []
+
+    try:
+        start_idx = max(1, int(generated_turn_idx))
+    except (TypeError, ValueError):
+        return []
+
+    continuation = output_turns[start_idx - 1 :]
+    if not continuation:
+        return []
+
+    # Optional de-dup of repeated user prompt against input history's last user.
+    if input_history_obj:
+        input_turns = parse_history_json_obj(input_history_obj)
+        if input_turns:
+            last_input_user = str(input_turns[-1].get("user", "")).strip()
+            if str(continuation[0].get("user", "")).strip() == last_input_user:
+                continuation[0]["user"] = ""
+
+    return continuation
 
 
 left_col, right_col = st.columns([1.2, 1], gap="large")
@@ -309,7 +561,7 @@ with left_col:
 
 with right_col:
     st.markdown('<div class="section-title">JSON Mode Generation</div>', unsafe_allow_html=True)
-    st.caption("Using all available few-shot examples from data/examples.json (max 6 turns each).")
+    st.caption("Using all available few-shot examples from data/examples.json (max 5 turns each).")
 
     history_sig = json_signature(uploaded_history) if uploaded_history is not None else ""
 
@@ -318,54 +570,35 @@ with right_col:
             st.warning("Please upload conversation JSON first.")
             st.session_state.generated_outputs = []
         else:
-            eval_prompt = ""
-            fill_pending = False
-
-            pending_idx, pending_user = get_latest_pending_user(uploaded_history)
-            if pending_idx is not None and pending_user:
-                eval_prompt = pending_user
-                fill_pending = True
-            else:
-                latest_idx, latest_user = get_latest_user_any(uploaded_history)
-                if latest_idx is not None and latest_user:
-                    eval_prompt = latest_user
-                    st.info(
-                        f"No pending turn found. Using latest user message user_msg{latest_idx} as prompt."
-                    )
-                else:
+            with st.spinner("Generating answers from all configured models..."):
+                formatted_outputs = []
+                user_only_history = build_user_only_history(uploaded_history, max_turns=MAX_GENERATED_TURNS)
+                if not user_only_history:
                     st.warning("Could not find any user_msgN in uploaded JSON.")
                     st.session_state.generated_outputs = []
                     st.stop()
 
-            with st.spinner("Generating answers from all configured models..."):
-                runtime_prompt = build_few_shot_json_prompt(
-                    history_obj=uploaded_history,
-                    current_user_msg=eval_prompt,
-                    num_examples=10_000,
-                    max_turns=6,
-                )
-                raw_outputs = generate_all(runtime_prompt)
-
-                formatted_outputs = []
-                for item in raw_outputs:
-                    structured = upsert_json_turn(
-                        uploaded_history,
-                        eval_prompt,
-                        item["text"],
-                        fill_pending=fill_pending,
+                for model in MODELS:
+                    item = generate_structured_history_for_model(
+                        model=model,
+                        input_history_obj=uploaded_history,
+                        max_turns=MAX_GENERATED_TURNS,
                     )
+                    structured = item["structured"]
                     formatted_outputs.append(
                         {
                             "model": item["model"],
-                            "text": json.dumps(structured, ensure_ascii=False, indent=2),
+                            "requested_model": item.get("requested_model", item["model"]),
+                            "resolved_model": item.get("resolved_model", item["model"]),
+                            "raw_text": item.get("raw_text", ""),
+                            "parsed_json": to_pretty_json_text(structured),
                             "structured": structured,
-                            "raw_text": item["text"],
                         }
                     )
 
                 st.session_state.generated_outputs = formatted_outputs
                 st.session_state.generated_meta = {
-                    "eval_prompt": eval_prompt,
+                    "eval_prompt": get_latest_user_any(uploaded_history)[1] or "",
                     "history_sig": history_sig,
                 }
 
@@ -386,8 +619,16 @@ if outputs_match_context:
         selected_model = st.selectbox("Generated model", model_names)
         selected_output = next(o for o in outputs if o["model"] == selected_model)
 
-        st.markdown("Model Answer Chat")
-        render_chat_window(selected_output["structured"])
+        st.caption(
+            f"Configured model: `{selected_output.get('requested_model', selected_model)}` | "
+            f"Provider model: `{selected_output.get('resolved_model', selected_model)}`"
+        )
+        st.markdown("Generated JSON")
+        st.code(selected_output.get("parsed_json", "{}"), language="json")
+
+        st.markdown("Generated Model Chat")
+        generated_structured = selected_output.get("structured", {})
+        render_chat_window(generated_structured)
 elif outputs:
     st.info("JSON file or few-shot count changed. Click Generate Model Answers to refresh outputs.")
 

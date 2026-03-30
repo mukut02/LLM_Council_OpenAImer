@@ -81,4 +81,8 @@ def generate(model, prompt):
     content = response.choices[0].message.content
     if "qwen" in model.lower() or "deepseek" in model.lower():
         content = _strip_leading_think_block(content)
-    return content
+    return {
+        "requested_model": model,
+        "resolved_model": resolved_model,
+        "text": content,
+    }

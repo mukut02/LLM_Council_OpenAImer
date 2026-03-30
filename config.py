@@ -1,4 +1,4 @@
-GROQ_API_KEY = "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"
+GROQ_API_KEY = "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"
 
 MODELS = [
     "llama-3.3-70b-versatile",
