@@ -1,0 +1,7 @@
+streamlit 
+sentence-transformers 
+bert-score 
+openai 
+torch
+fastapi
+uvicorn

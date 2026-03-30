@@ -1,0 +1,64 @@
+{
+  "examples": [
+    {
+      "id": 1,
+      "category": "Emotional Exhaustion / Drained",
+      "user": "I feel tired all the time. Not just physically, like even thinking feels like too much.",
+      "ai": "That kind of tiredness isn’t just about sleep, it’s more like your mind has been carrying too much for too long. Do you feel like there’s something specific draining you, or has it just slowly built up over time?"
+    },
+    {
+      "id": 2,
+      "category": "Low / Heavy Mood",
+      "user": "I don’t feel like doing anything these days. Even things I used to enjoy feel pointless.",
+      "ai": "When things that once mattered start feeling empty, it usually means something deeper has shifted, not that you’ve suddenly stopped caring. Does it feel more like a loss of interest, or more like you don’t have the energy to engage anymore?"
+    },
+    {
+      "id": 3,
+      "category": "Irritation / Overwhelm",
+      "user": "Everyone is just annoying me lately. Even small things are getting to me.",
+      "ai": "It sounds like your tolerance is worn thin, like your system is already overloaded and even small things are tipping it over. Has something been building up underneath all this irritation?"
+    },
+    {
+      "id": 4,
+      "category": "Anxiety / Overthinking",
+      "user": "I keep thinking about everything that could go wrong. I can’t switch it off.",
+      "ai": "When your mind keeps jumping ahead like that, it’s usually trying to protect you by preparing for worst cases, even if it’s exhausting. Do you notice if it gets worse at certain times, like when you’re alone or trying to rest?"
+    },
+    {
+      "id": 5,
+      "category": "Numbness",
+      "user": "I don’t really feel sad or happy. Just… nothing.",
+      "ai": "That ‘nothing’ feeling can sometimes be your mind’s way of stepping back when things get overwhelming. It’s not emptiness in a simple sense, more like everything’s been turned down. Do you remember when you last felt something strongly?"
+    },
+    {
+      "id": 6,
+      "category": "Conflicted / Stuck",
+      "user": "I don’t know what I’m supposed to do anymore. Every option feels wrong.",
+      "ai": "That kind of stuck feeling often comes when every choice feels like it carries some kind of loss. Is it more that you’re afraid of making the wrong decision, or that none of the options feel right to begin with?"
+    },
+    {
+      "id": 7,
+      "category": "Disappointment",
+      "user": "I worked really hard for this and it still didn’t work out.",
+      "ai": "That hits harder than people realize, when effort doesn’t translate into outcome. It’s not just about what happened, it’s about what you expected it to mean. What were you hoping this would change for you?"
+    },
+    {
+      "id": 8,
+      "category": "Hopeful but Uncertain",
+      "user": "I feel like something might get better, but I’m also scared it won’t.",
+      "ai": "That mix of hope and hesitation makes sense, you’re letting yourself imagine something better, but also protecting yourself from being disappointed again. What feels different this time compared to before?"
+    },
+    {
+      "id": 9,
+      "category": "Guilt / Self-Blame",
+      "user": "I feel like I messed everything up. It’s probably my fault.",
+      "ai": "When things go wrong, it’s really easy to pull all the blame onto yourself, even for things that weren’t fully in your control. What part of this actually feels like it was yours to carry, and what might not be?"
+    },
+    {
+      "id": 10,
+      "category": "Subtle Withdrawal",
+      "user": "I’ve just been staying in my room mostly. I don’t really feel like talking to anyone.",
+      "ai": "Pulling back like that usually isn’t random, it’s often a way of protecting yourself when something feels off. Does being alone feel more comforting right now, or more like you just don’t have the energy to be around people?"
+    }
+  ]
+}
