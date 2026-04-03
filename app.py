@@ -200,6 +200,29 @@ with left_col:
         except Exception:
             st.error("Invalid conversation JSON. Please upload a valid file.")
 
+    st.markdown('<div class="section-title">Council Ground Truth TXT (Optional)</div>', unsafe_allow_html=True)
+    ground_truth_file = st.file_uploader(
+        "Upload council ground truth text",
+        type=["txt"],
+        help="Optional .txt context used as council-provided ground truth during evaluation.",
+    )
+
+    uploaded_ground_truth = None
+    if ground_truth_file is not None:
+        try:
+            uploaded_ground_truth = ground_truth_file.getvalue().decode("utf-8").strip()
+            st.success("Ground-truth text loaded.")
+            st.markdown("Council Ground Truth Context")
+            st.text_area(
+                "Ground truth preview",
+                value=uploaded_ground_truth,
+                height=220,
+                disabled=True,
+                label_visibility="collapsed",
+            )
+        except Exception:
+            st.error("Invalid ground-truth text file. Please upload a valid `.txt` file.")
+
 with right_col:
     st.markdown('<div class="section-title">Model Evaluation</div>', unsafe_allow_html=True)
 
@@ -208,13 +231,22 @@ with right_col:
             st.warning("Please upload conversation JSON first.")
         else:
             history_sig = json.dumps(uploaded_history, sort_keys=True, ensure_ascii=False)
-            cache_key = f"input::{history_sig}"
+            ground_truth_sig = (
+                uploaded_ground_truth
+                if uploaded_ground_truth is not None
+                else ""
+            )
+            cache_key = f"input::{history_sig}::ground_truth::{ground_truth_sig}"
             with st.spinner("Assessing input JSON with the council..."):
                 result_val = st.session_state.council_cache.get(cache_key)
                 if result_val is None:
-                    result_val = evaluate_input_history_with_council(uploaded_history)
+                    result_val = evaluate_input_history_with_council(
+                        uploaded_history,
+                        ground_truth_history=uploaded_ground_truth,
+                    )
                     st.session_state.council_cache[cache_key] = result_val
                 st.session_state["input_eval_result"] = result_val
+                st.session_state["input_eval_has_ground_truth"] = uploaded_ground_truth is not None
 
 st.markdown("---")
 st.subheader("Live Evaluation")
@@ -222,6 +254,14 @@ st.subheader("Live Evaluation")
 result = st.session_state.get("input_eval_result")
 if result and uploaded_history is not None:
     st.markdown("**Assessed Source: `Input JSON`**")
+    if result.get("ground_truth_source") == "provided":
+        st.caption("Council ground-truth text context was used during evaluation.")
+    else:
+        st.caption("No separate council ground-truth text was provided. A short ground-truth summary was generated from the conversation and used for evaluation.")
+
+    if result.get("ground_truth_context"):
+        with st.expander("Ground Truth Context Used"):
+            st.text(result["ground_truth_context"])
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Median Inference", f"{result['median_inference']:.4f}")

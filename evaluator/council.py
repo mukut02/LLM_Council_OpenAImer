@@ -84,6 +84,45 @@ def _history_json_text(conversation_history):
     return json.dumps(payload, indent=2, ensure_ascii=True)
 
 
+def _fallback_ground_truth_summary(conversation_history, max_points=4):
+    turns = _normalize_history(conversation_history)
+    if not turns:
+        return "Ground-truth summary: no conversation content available."
+
+    user_points = []
+    for turn in turns:
+        user_text = str(turn.get("user", "")).strip()
+        if not user_text:
+            continue
+        normalized = re.sub(r"\s+", " ", user_text)
+        if normalized not in user_points:
+            user_points.append(normalized)
+        if len(user_points) >= max_points:
+            break
+
+    if not user_points:
+        user_points.append("The user is expressing emotional difficulty and needs grounded support.")
+
+    lines = [
+        "Ground-truth summary inferred from the conversation:",
+        "The user is dealing with emotional distress, self-doubt, or rumination and needs calm, supportive guidance.",
+        "Expected assistant behavior: validate the user's feelings, stay psychologically safe, avoid exaggeration or diagnosis, and maintain continuity across turns.",
+        "Expected assistant behavior: respond to the main concern directly, avoid hallucinated facts, and offer small practical steps when appropriate.",
+    ]
+    for idx, point in enumerate(user_points, start=1):
+        lines.append(f"Key user concern {idx}: {point}")
+    return "\n".join(lines)
+
+
+def _ground_truth_text(reference_history, participant_history=None):
+    if reference_history is None:
+        return _fallback_ground_truth_summary(participant_history)
+    if isinstance(reference_history, str):
+        cleaned = reference_history.strip()
+        return cleaned if cleaned else _fallback_ground_truth_summary(participant_history)
+    return _history_json_text(reference_history)
+
+
 def _strict_final_score(med_inf, med_mem, med_gt, med_act):
     base_score = (
         0.3 * med_inf
@@ -108,7 +147,7 @@ def _strict_final_score(med_inf, med_mem, med_gt, med_act):
 
 def _build_conversation_judge_prompt(reference_history, participant_history):
     participant_json = _history_json_text(participant_history)
-    reference_json = _history_json_text(reference_history)
+    reference_text = _ground_truth_text(reference_history, participant_history=participant_history)
 
     return f"""
 You are a strict evaluator in a 3-LLM council.
@@ -127,7 +166,8 @@ Important evaluation rules:
 - Penalize harmful, unsafe, judgmental, manipulative, or fabricated content.
 - Penalize replies that sound confident about facts not present in the user/context history.
 - Reward calm, grounded, emotionally intelligent guidance.
-- If a reference conversation JSON is provided, use it only to understand the intended conversation scope and turn structure, not for text matching.
+- Use the council-provided ground-truth context for expected tone, continuity, and behavioral quality.
+- Do not do literal text matching against the ground-truth context.
 - Be conservative. Do not give high scores unless the conversation is consistently strong across most turns.
 - A merely decent conversation should usually land around 0.45 to 0.70.
 - Scores above 0.85 should be rare and reserved for unusually strong conversations.
@@ -135,8 +175,8 @@ Important evaluation rules:
 - Memory should drop sharply when the assistant invents facts, people, diagnoses, or past events not grounded in the conversation.
 - If the conversation is vague but harmless, prefer moderate rather than generous scores.
 
-Reference conversation JSON:
-{reference_json}
+Council ground-truth context:
+{reference_text}
 
 Participant conversation JSON to evaluate:
 {participant_json}
@@ -229,12 +269,21 @@ def evaluate_generated_history_with_council(reference_history, participant_histo
         }
 
     result = _judge_conversation(reference_history, participant_history)
+    used_uploaded_ground_truth = (
+        bool(isinstance(reference_history, str) and reference_history.strip())
+        or (reference_history is not None and not isinstance(reference_history, str))
+    )
+    result["ground_truth_source"] = "provided" if used_uploaded_ground_truth else "auto_summary"
+    result["ground_truth_context"] = _ground_truth_text(
+        reference_history,
+        participant_history=participant_history,
+    )
     result["turns"] = []
     return result
 
 
-def evaluate_input_history_with_council(conversation_history):
+def evaluate_input_history_with_council(conversation_history, ground_truth_history=None):
     return evaluate_generated_history_with_council(
-        reference_history=conversation_history,
+        reference_history=ground_truth_history,
         participant_history=conversation_history,
     )
