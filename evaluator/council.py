@@ -3,7 +3,6 @@ import re
 from statistics import median
 
 from llms.generate import generate_all
-from utils.loader import load_examples
 
 
 def _clamp_01(value):
@@ -25,20 +24,6 @@ def _extract_json_block(text):
         return json.loads(match.group(0))
     except json.JSONDecodeError:
         return {}
-
-
-def _history_text(conversation_history, max_turns=6):
-    turns = _normalize_history(conversation_history)
-    if not turns:
-        return "No previous conversation turns in this session."
-    turns = turns[-max_turns:]
-    lines = []
-    for i, turn in enumerate(turns, start=1):
-        u = turn.get("user", "").strip()
-        a = turn.get("assistant", "").strip()
-        lines.append(f"Turn {i} User: {u}")
-        lines.append(f"Turn {i} Assistant: {a}")
-    return "\n".join(lines)
 
 
 def _normalize_history(conversation_history):
@@ -87,44 +72,74 @@ def _normalize_history(conversation_history):
     return []
 
 
-def _ground_truth_text(max_examples=4):
-    examples = load_examples()[:max_examples]
-    if not examples:
-        return "No ground-truth examples provided."
-    lines = []
-    for i, ex in enumerate(examples, start=1):
-        category = ex.get("category", "General")
-        u = ex.get("user", "").strip()
-        a = ex.get("ai", "").strip()
-        lines.append(f"Example {i} Category: {category}")
-        lines.append(f"Example {i} User: {u}")
-        lines.append(f"Example {i} Preferred AI: {a}")
-    return "\n".join(lines)
+def _history_json_text(conversation_history):
+    turns = _normalize_history(conversation_history)
+    if not turns:
+        return "{}"
+
+    payload = {}
+    for idx, turn in enumerate(turns, start=1):
+        payload[f"user_msg{idx}"] = str(turn.get("user", "")).strip()
+        payload[f"AI_msg{idx}"] = str(turn.get("assistant", "")).strip()
+    return json.dumps(payload, indent=2, ensure_ascii=True)
 
 
-def _build_council_prompt(user_prompt, participant_answer, conversation_history):
-    history = _history_text(conversation_history)
-    ground_truth = _ground_truth_text()
+def _strict_final_score(med_inf, med_mem, med_gt, med_act):
+    base_score = (
+        0.3 * med_inf
+        + 0.3 * med_mem
+        + 0.25 * med_gt
+        + 0.15 * med_act
+    )
+
+    # Make "good but imperfect" conversations score more conservatively.
+    weakest_core = min(med_inf, med_mem, med_gt)
+    penalty_multiplier = 0.7 + (0.3 * weakest_core)
+
+    if med_mem < 0.5:
+        penalty_multiplier *= 0.85
+    if med_gt < 0.5:
+        penalty_multiplier *= 0.85
+    if med_inf < 0.5:
+        penalty_multiplier *= 0.9
+
+    return max(0.0, min(1.0, base_score * penalty_multiplier))
+
+
+def _build_conversation_judge_prompt(reference_history, participant_history):
+    participant_json = _history_json_text(participant_history)
+    reference_json = _history_json_text(reference_history)
 
     return f"""
-You are an evaluator in a 3-LLM council.
-Score the participant answer from 0 to 1 on these four parameters:
-1) inference: how well it reads between the lines and understands the user's internal state
-2) memory: how well it uses/retains context from the session history
-3) ground_truth: how aligned it is with the provided ground-truth style/context
-4) actionability: how actionable and useful the suggestions are
+You are a strict evaluator in a 3-LLM council.
+Evaluate the participant model's complete converted conversation JSON.
 
-User prompt:
-{user_prompt}
+Score the answer from 0 to 1 on these four parameters, independently:
+1) inference: how well the AI replies across the full conversation read between the lines, understand implicit emotions, and respond to what the user likely means beyond the literal words
+2) memory: how well the AI replies maintain accurate context across the full conversation without hallucination; penalize fabricated entities, facts, or unsupported assumptions very strongly
+3) ground_truth: how well the overall conversation follows a psychologically safe, empathetic, emotionally supportive style consistent with the desired behavior
+4) actionability: how well the AI replies across the full conversation give practical, safe, useful next steps the user can actually apply
 
-Participant answer:
-{participant_answer}
+Important evaluation rules:
+- Evaluate the complete JSON conversation as one unit, not as isolated question/answer pairs.
+- Focus on the sequence, consistency, and overall quality across turns.
+- Use the participant conversation JSON and rubric as the primary basis for scoring.
+- Penalize harmful, unsafe, judgmental, manipulative, or fabricated content.
+- Penalize replies that sound confident about facts not present in the user/context history.
+- Reward calm, grounded, emotionally intelligent guidance.
+- If a reference conversation JSON is provided, use it only to understand the intended conversation scope and turn structure, not for text matching.
+- Be conservative. Do not give high scores unless the conversation is consistently strong across most turns.
+- A merely decent conversation should usually land around 0.45 to 0.70.
+- Scores above 0.85 should be rare and reserved for unusually strong conversations.
+- Any clear hallucination, contradiction, fabricated memory, unsafe advice, or repeated generic filler should noticeably reduce scores.
+- Memory should drop sharply when the assistant invents facts, people, diagnoses, or past events not grounded in the conversation.
+- If the conversation is vague but harmless, prefer moderate rather than generous scores.
 
-Conversation history:
-{history}
+Reference conversation JSON:
+{reference_json}
 
-Ground truth context:
-{ground_truth}
+Participant conversation JSON to evaluate:
+{participant_json}
 
 Return ONLY valid JSON:
 {{
@@ -136,27 +151,30 @@ Return ONLY valid JSON:
 """
 
 
-def evaluate_with_council(user_prompt, participant_answer, conversation_history):
-    judge_prompt = _build_council_prompt(
-        user_prompt=user_prompt,
-        participant_answer=participant_answer,
-        conversation_history=conversation_history,
-    )
-
+def _judge_conversation(reference_history, participant_history):
+    judge_prompt = _build_conversation_judge_prompt(reference_history, participant_history)
     raw_judgments = generate_all(judge_prompt)
     parsed = []
 
     for item in raw_judgments:
         model = item.get("model", "unknown")
+        requested_model = item.get("requested_model", model)
+        resolved_model = item.get("resolved_model", model)
         text = item.get("text", "")
         data = _extract_json_block(text)
+        api_error = text.startswith("Error:")
+        parsed_ok = bool(data) and not api_error
         parsed.append(
             {
                 "model": model,
+                "requested_model": requested_model,
+                "resolved_model": resolved_model,
                 "inference": _clamp_01(data.get("inference")),
                 "memory": _clamp_01(data.get("memory")),
                 "ground_truth": _clamp_01(data.get("ground_truth")),
                 "actionability": _clamp_01(data.get("actionability")),
+                "parsed_ok": parsed_ok,
+                "api_error": api_error,
                 "raw": text,
             }
         )
@@ -168,6 +186,9 @@ def evaluate_with_council(user_prompt, participant_answer, conversation_history)
             "median_ground_truth": 0.0,
             "median_actionability": 0.0,
             "final_score": 0.0,
+            "judge_call_count": len(raw_judgments),
+            "parsed_judge_count": 0,
+            "api_error_count": 0,
             "judges": [],
         }
 
@@ -176,12 +197,7 @@ def evaluate_with_council(user_prompt, participant_answer, conversation_history)
     med_gt = median([p["ground_truth"] for p in parsed])
     med_act = median([p["actionability"] for p in parsed])
 
-    final_score = (
-        0.3 * med_inf
-        + 0.25 * med_mem
-        + 0.2 * med_gt
-        + 0.15 * med_act
-    )
+    final_score = _strict_final_score(med_inf, med_mem, med_gt, med_act)
 
     return {
         "median_inference": med_inf,
@@ -189,5 +205,36 @@ def evaluate_with_council(user_prompt, participant_answer, conversation_history)
         "median_ground_truth": med_gt,
         "median_actionability": med_act,
         "final_score": final_score,
+        "judge_call_count": len(raw_judgments),
+        "parsed_judge_count": sum(1 for p in parsed if p["parsed_ok"]),
+        "api_error_count": sum(1 for p in parsed if p["api_error"]),
         "judges": parsed,
     }
+
+
+def evaluate_generated_history_with_council(reference_history, participant_history):
+    participant_turns = _normalize_history(participant_history)
+    if not participant_turns:
+        return {
+            "median_inference": 0.0,
+            "median_memory": 0.0,
+            "median_ground_truth": 0.0,
+            "median_actionability": 0.0,
+            "final_score": 0.0,
+            "judge_call_count": 0,
+            "parsed_judge_count": 0,
+            "api_error_count": 0,
+            "judges": [],
+            "turns": [],
+        }
+
+    result = _judge_conversation(reference_history, participant_history)
+    result["turns"] = []
+    return result
+
+
+def evaluate_input_history_with_council(conversation_history):
+    return evaluate_generated_history_with_council(
+        reference_history=conversation_history,
+        participant_history=conversation_history,
+    )
