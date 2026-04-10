@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 function MetricCard({ label, value }) {
   const display = Number.isFinite(value) ? value.toFixed(4) : "-";
@@ -14,6 +14,8 @@ export default function App() {
   const [prompt, setPrompt] = useState("");
   const [modelAnswer, setModelAnswer] = useState("");
   const [numExamples, setNumExamples] = useState(3);
+  const [availableApiSlots, setAvailableApiSlots] = useState(["api1", "api2", "api3"]);
+  const [selectedApiIndex, setSelectedApiIndex] = useState(0);
   const [outputs, setOutputs] = useState([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [metrics, setMetrics] = useState(null);
@@ -25,6 +27,33 @@ export default function App() {
     () => outputs.find((item) => item.model === selectedModel),
     [outputs, selectedModel]
   );
+  const selectedApiSlot = availableApiSlots[selectedApiIndex] ?? availableApiSlots[0] ?? "api1";
+
+  async function loadApiSlots() {
+    try {
+      const res = await fetch("/api/api-slots");
+      if (!res.ok) {
+        return;
+      }
+
+      const data = await res.json();
+      const nextSlots = data.available_api_slots ?? [];
+      if (!nextSlots.length) {
+        return;
+      }
+
+      setAvailableApiSlots(nextSlots);
+      const preferredSlot = data.default_api_slot ?? nextSlots[0];
+      const nextIndex = nextSlots.indexOf(preferredSlot);
+      setSelectedApiIndex(nextIndex >= 0 ? nextIndex : 0);
+    } catch {
+      // Keep the local fallback list if the API-slot probe fails.
+    }
+  }
+
+  useEffect(() => {
+    loadApiSlots();
+  }, []);
 
   async function handleGenerate() {
     setError("");
@@ -40,7 +69,11 @@ export default function App() {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, num_examples: numExamples })
+        body: JSON.stringify({
+          prompt,
+          num_examples: numExamples,
+          api_slot: selectedApiSlot
+        })
       });
 
       if (!res.ok) {
@@ -99,6 +132,40 @@ export default function App() {
 
       <main className="layout">
         <section className="panel">
+          <div className="field">
+            <span>Active API</span>
+            <div className="api-slider-card">
+              <input
+                type="range"
+                min={0}
+                max={Math.max(availableApiSlots.length - 1, 0)}
+                step={1}
+                value={selectedApiIndex}
+                onChange={(e) => setSelectedApiIndex(Number(e.target.value))}
+                disabled={availableApiSlots.length <= 1}
+              />
+              <div className="api-slider-meta">
+                <strong>{selectedApiSlot.toUpperCase()}</strong>
+                <span>
+                  {availableApiSlots.length} available
+                  {availableApiSlots.length === 1 ? " slot" : " slots"}
+                </span>
+              </div>
+              <div className="api-slot-list">
+                {availableApiSlots.map((slot, index) => (
+                  <button
+                    key={slot}
+                    type="button"
+                    className={`slot-chip ${index === selectedApiIndex ? "active" : ""}`}
+                    onClick={() => setSelectedApiIndex(index)}
+                  >
+                    {slot.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           <label className="field">
             <span>Enter Prompt</span>
             <textarea

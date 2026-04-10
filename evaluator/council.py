@@ -191,9 +191,9 @@ Return ONLY valid JSON:
 """
 
 
-def _judge_conversation(reference_history, participant_history):
+def _judge_conversation(reference_history, participant_history, api_slot=None):
     judge_prompt = _build_conversation_judge_prompt(reference_history, participant_history)
-    raw_judgments = generate_all(judge_prompt)
+    raw_judgments = generate_all(judge_prompt, api_slot=api_slot)
     parsed = []
 
     for item in raw_judgments:
@@ -252,7 +252,7 @@ def _judge_conversation(reference_history, participant_history):
     }
 
 
-def evaluate_generated_history_with_council(reference_history, participant_history):
+def evaluate_generated_history_with_council(reference_history, participant_history, api_slot=None):
     participant_turns = _normalize_history(participant_history)
     if not participant_turns:
         return {
@@ -268,7 +268,7 @@ def evaluate_generated_history_with_council(reference_history, participant_histo
             "turns": [],
         }
 
-    result = _judge_conversation(reference_history, participant_history)
+    result = _judge_conversation(reference_history, participant_history, api_slot=api_slot)
     used_uploaded_ground_truth = (
         bool(isinstance(reference_history, str) and reference_history.strip())
         or (reference_history is not None and not isinstance(reference_history, str))
@@ -278,12 +278,14 @@ def evaluate_generated_history_with_council(reference_history, participant_histo
         reference_history,
         participant_history=participant_history,
     )
+    result["api_slot"] = api_slot
     result["turns"] = []
     return result
 
 
-def evaluate_input_history_with_council(conversation_history, ground_truth_history=None):
+def evaluate_input_history_with_council(conversation_history, ground_truth_history=None, api_slot=None):
     return evaluate_generated_history_with_council(
         reference_history=ground_truth_history,
         participant_history=conversation_history,
+        api_slot=api_slot,
     )

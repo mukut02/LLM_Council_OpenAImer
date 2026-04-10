@@ -4,17 +4,19 @@ from config import MODELS
 from llms.groq_client import generate
 
 
-def _generate_one(model, prompt):
+def _generate_one(model, prompt, api_slot=None):
     try:
-        result = generate(model, prompt)
+        result = generate(model, prompt, api_slot=api_slot)
         if isinstance(result, dict):
             return {
+                "api_slot": result.get("api_slot", api_slot),
                 "model": model,
                 "requested_model": result.get("requested_model", model),
                 "resolved_model": result.get("resolved_model", model),
                 "text": result.get("text", ""),
             }
         return {
+            "api_slot": api_slot,
             "model": model,
             "requested_model": model,
             "resolved_model": model,
@@ -22,6 +24,7 @@ def _generate_one(model, prompt):
         }
     except Exception as e:
         return {
+            "api_slot": api_slot,
             "model": model,
             "requested_model": model,
             "resolved_model": model,
@@ -29,11 +32,11 @@ def _generate_one(model, prompt):
         }
 
 
-def generate_one(model, prompt):
-    return _generate_one(model, prompt)
+def generate_one(model, prompt, api_slot=None):
+    return _generate_one(model, prompt, api_slot=api_slot)
 
 
-def generate_all(prompt):
+def generate_all(prompt, api_slot=None):
     if not MODELS:
         return []
 
@@ -43,7 +46,8 @@ def generate_all(prompt):
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_model = {
-            executor.submit(_generate_one, model, prompt): model for model in MODELS
+            executor.submit(_generate_one, model, prompt, api_slot): model
+            for model in MODELS
         }
         for future in as_completed(future_to_model):
             result = future.result()

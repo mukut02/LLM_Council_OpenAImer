@@ -81,6 +81,59 @@ body {
   color: var(--muted);
 }
 
+.api-slider-card {
+  border: 1px solid var(--stroke);
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f7fbf6, #ffffff);
+  padding: 12px;
+}
+
+.api-slider-card input[type="range"] {
+  padding: 0;
+  accent-color: var(--primary);
+}
+
+.api-slider-meta {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.api-slider-meta strong {
+  font-size: 18px;
+}
+
+.api-slider-meta span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.api-slot-list {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.slot-chip {
+  border: 1px solid var(--stroke);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--muted);
+  padding: 7px 12px;
+  font: inherit;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.slot-chip.active {
+  background: #e5f2e7;
+  border-color: #9fc4a8;
+  color: #1d4f2a;
+}
+
 textarea,
 input,
 select {

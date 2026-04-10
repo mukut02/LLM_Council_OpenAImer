@@ -5,7 +5,9 @@ from statistics import median
 
 import streamlit as st
 
+from config import DEFAULT_API_SLOT
 from evaluator.council import evaluate_input_history_with_council
+from llms.groq_client import get_available_api_slots
 
 st.set_page_config(page_title="OpenAImer LLM Council")
 
@@ -136,6 +138,12 @@ st.markdown(
 if "council_cache" not in st.session_state:
     st.session_state.council_cache = {}
 
+available_api_slots = get_available_api_slots()
+if "selected_api_slot" not in st.session_state:
+    st.session_state.selected_api_slot = (
+        DEFAULT_API_SLOT if DEFAULT_API_SLOT in available_api_slots else (available_api_slots[0] if available_api_slots else DEFAULT_API_SLOT)
+    )
+
 
 def parse_history_json_obj(history_obj):
     if not isinstance(history_obj, dict):
@@ -226,6 +234,23 @@ with left_col:
 with right_col:
     st.markdown('<div class="section-title">Model Evaluation</div>', unsafe_allow_html=True)
 
+    if available_api_slots:
+        selected_api_slot = st.selectbox(
+            "Select API Key",
+            options=available_api_slots,
+            index=available_api_slots.index(
+                st.session_state.selected_api_slot
+                if st.session_state.selected_api_slot in available_api_slots
+                else available_api_slots[0]
+            ),
+            help="Choose which configured API key slot to use for the 3-LLM council run.",
+        )
+        st.session_state.selected_api_slot = selected_api_slot
+        st.caption(f"Using `{selected_api_slot}` for the current council evaluation.")
+    else:
+        selected_api_slot = DEFAULT_API_SLOT
+        st.warning("No API key slots are configured.")
+
     if st.button("Assess Input JSON", use_container_width=True):
         if uploaded_history is None:
             st.warning("Please upload conversation JSON first.")
@@ -236,13 +261,14 @@ with right_col:
                 if uploaded_ground_truth is not None
                 else ""
             )
-            cache_key = f"input::{history_sig}::ground_truth::{ground_truth_sig}"
+            cache_key = f"input::{history_sig}::ground_truth::{ground_truth_sig}::api::{selected_api_slot}"
             with st.spinner("Assessing input JSON with the council..."):
                 result_val = st.session_state.council_cache.get(cache_key)
                 if result_val is None:
                     result_val = evaluate_input_history_with_council(
                         uploaded_history,
                         ground_truth_history=uploaded_ground_truth,
+                        api_slot=selected_api_slot,
                     )
                     st.session_state.council_cache[cache_key] = result_val
                 st.session_state["input_eval_result"] = result_val
@@ -254,6 +280,8 @@ st.subheader("Live Evaluation")
 result = st.session_state.get("input_eval_result")
 if result and uploaded_history is not None:
     st.markdown("**Assessed Source: `Input JSON`**")
+    if result.get("api_slot"):
+        st.caption(f"API slot used: `{result['api_slot']}`")
     if result.get("ground_truth_source") == "provided":
         st.caption("Council ground-truth text context was used during evaluation.")
     else:
