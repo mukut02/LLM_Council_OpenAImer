@@ -5,9 +5,11 @@ from statistics import median
 
 import streamlit as st
 
-from config import DEFAULT_API_SLOT
+import config
 from evaluator.council import evaluate_input_history_with_council
 from llms.groq_client import get_available_api_slots
+
+DEFAULT_API_SLOT = getattr(config, "DEFAULT_API_SLOT", "api1")
 
 st.set_page_config(page_title="OpenAImer LLM Council")
 
