@@ -1,4 +1,4 @@
-# Mental AI
+# LLM Council
 
 ## Run React frontend + Python API
 
